@@ -57,7 +57,6 @@ if df_countries is None or not available_years:
 
 # --- 3. (新功能) 建立年份選擇「Bar」 ---
 st.header("請選擇您想查看的年份")
-st.info("（只會顯示該年份有實際提供數據的國家）")
 
 selected_year = st.selectbox(
     "選擇年份：",
