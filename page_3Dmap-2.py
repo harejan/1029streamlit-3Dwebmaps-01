@@ -8,7 +8,7 @@ st.title("Plotly 3D 地球儀：全球極端貧窮人口比例")
 
 # --- 1. 定義我們要使用的「原始」檔案和欄位 ---
 # (這必須是您在 GitHub 上傳的原始檔案名稱)
-ORIGINAL_CSV_FILE = "share-of-population-in-extreme-poverty.zip/share-of-population-in-extreme-poverty.csv"
+ORIGINAL_CSV_FILE = "share-of-population-in-extreme-poverty.csv"
 DATA_COLUMN = "Share of population in poverty ($3 a day, 2021 prices)"
 
 # --- 2. 讀取「原始」 CSV 檔案 ---
