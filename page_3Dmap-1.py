@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import pydeck as pdk
 # 注意：這個版本不再需要 numpy
 
@@ -79,7 +80,7 @@ column_layer = pdk.Layer(
     get_elevation=WEIGHT_ROW_NAME,             # 高度 = 遊客人數
     elevation_scale=0.01, # 將遊客人數縮小，避免柱子太高
     radius=500,                                # 每個柱子的半徑 (500 公尺)
-    get_fill_color=[255, 165, 0, 180],         # 柱子顏色 (橘色)
+    get_fill_color=[0, 128, 255, 180],         # 柱子顏色 (橘色)
     pickable=True,
     extruded=True,
 )
