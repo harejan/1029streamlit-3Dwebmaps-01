@@ -3,6 +3,22 @@ import pandas as pd
 import numpy as np
 import pydeck as pdk
 
+# --- (重要) 1. 請將這個設定區塊加到您 page_3Dmap-1.py 的最上方 ---
+
+# **** 1-1. 您的 CSV 檔案名稱 ****
+YOUR_CSV_FILE = "kaohsiung_tourist.csv" 
+
+# **** 1-2. (請檢查) 您的「緯度」欄位名稱 ****
+LAT_COLUMN = "lat"  # <--- 如果您的欄位名稱是 '緯度'，請改成 "緯度"
+
+# **** 1-3. (請檢查) 您的「經度」欄位名稱 ****
+LON_COLUMN = "lon"  # <--- 如果您的欄位名稱是 '經度'，請改成 "經度"
+
+# **** 1-4. (請檢查) 您的「遊客人數」欄位名稱 ****
+WEIGHT_COLUMN = "visitors" # <--- 請改成您遊客人數的實際欄位名稱
+
+# --------------------------------------------
+
 st.title("2024年高雄市觀光區人數 (向量 - 密度圖)")
 
 # 0. 檢查 Mapbox 金鑰是否存在於 Secrets 中 (名稱應為 MAPBOX_API_KEY)
