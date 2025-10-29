@@ -3,68 +3,107 @@ import pandas as pd
 import numpy as np
 import pydeck as pdk
 
-# --- (重要) 1. 請將這個設定區塊加到您 page_3Dmap-1.py 的最上方 ---
+st.title("高雄市觀光熱點 3D 密度圖")
+st.subheader("（依遊客人數加權）")
 
-# **** 1-1. 您的 CSV 檔案名稱 ****
+# --- 1. 設定您的檔案名稱 ---
+# (請確保這個檔案已上傳到 GitHub，與 app.py 放在一起)
 YOUR_CSV_FILE = "kaohsiung_tourist.csv" 
 
-# **** 1-2. (請檢查) 您的「緯度」欄位名稱 ****
-LAT_COLUMN = "lat"  # <--- 如果您的欄位名稱是 '緯度'，請改成 "緯度"
+# ------------------------------
 
-# **** 1-3. (請檢查) 您的「經度」欄位名稱 ****
-LON_COLUMN = "lon"  # <--- 如果您的欄位名稱是 '經度'，請改成 "經度"
-
-# **** 1-4. (請檢查) 您的「遊客人數」欄位名稱 ****
-WEIGHT_COLUMN = "visitors" # <--- 請改成您遊客人數的實際欄位名稱
-
-# --------------------------------------------
-
-st.title("2024年高雄市觀光區人數 (向量 - 密度圖)")
-
-# 0. 檢查 Mapbox 金鑰是否存在於 Secrets 中 (名稱應為 MAPBOX_API_KEY)
+# 0. 檢查 Mapbox 金鑰
 if "MAPBOX_API_KEY" not in st.secrets:
-    st.error("Mapbox API Key (名稱需為 MAPBOX_API_KEY) 未設定！請在雲端 Secrets 中設定。")
+    st.error("Mapbox API Key (名稱需為 MAPBOX_API_KEY) 未設定！")
     st.stop()
 
-# --- 2. 直接讀取檔案 ---
+# --- 2. (關鍵) 讀取並「轉置」您的 CSV 檔案 ---
 try:
-    data = pd.read_csv(YOUR_CSV_FILE)
+    # 讀取 CSV，並將第一欄 (景點名稱) 作為索引 (index)
+    data_raw = pd.read_csv(YOUR_CSV_FILE, index_col=0)
+    
+    # 執行「轉置」(Transpose)，讓 (壽山動物園, 旗津...) 變成「列」
+    data = data_raw.T 
+    
+    # 將索引 (景點名稱) 變回一個普通的欄位
+    data = data.reset_index()
+    
+    # 重新命名這個新欄位，方便辨識
+    data = data.rename(columns={'index': '景點名稱'})
+    
+    st.success(f"成功讀取並轉置檔案 '{YOUR_CSV_FILE}'！")
+    
 except FileNotFoundError:
     st.error(f"錯誤：找不到檔案 '{YOUR_CSV_FILE}'。")
-    st.error("請確保您的 CSV 檔案已上傳到 Streamlit (與 app.py 放在一起)，並且上面的檔案名稱拼寫正確。")
+    st.error("請確保您的 CSV 檔案已上傳到 Streamlit (與 app.py 放在一起)。")
     st.stop()
 except Exception as e:
-    st.error(f"讀取 CSV '{YOUR_CSV_FILE}' 時出錯: {e}")
+    st.error(f"讀取或轉置 CSV 時出錯: {e}")
     st.stop()
 
-# --- 3. 檢查欄位是否存在 ---
-required_columns = {LAT_COLUMN, LON_COLUMN, WEIGHT_COLUMN}
-if not required_columns.issubset(data.columns):
-    st.error(f"錯誤：您在程式碼中設定的欄位名稱在 CSV 檔案中找不到。")
-    st.error(f"您設定的欄位： {required_columns}")
-    st.error(f"CSV 實際有的欄位： {data.columns.tolist()}")
+# --- 3. (關鍵) 讓使用者手動對應欄位 ---
+# 現在 data 已經是「長資料」，我們可以用下拉選單來選欄位
+st.write("---")
+st.subheader("步驟 1：請指定對應的欄位名稱")
+st.info("程式已自動將您的寬資料轉置。請檢查以下欄位是否正確。")
+
+all_columns = data.columns.tolist()
+
+# 輔助函式：自動猜測可能的欄位名稱
+def guess_column(name_list, columns):
+    for name in name_list: # 傳入可能的名稱
+        for col in columns:
+            if name.lower() in col.lower():
+                return col
+    return columns[0] # 預設選第一個
+
+# 讓使用者選擇 緯度
+lat_col = st.selectbox(
+    "請選擇『緯度』(Latitude) 欄位：", 
+    all_columns, 
+    index=all_columns.index(guess_column(['lat', '緯度'], all_columns))
+)
+# 讓使用者選擇 經度
+lon_col = st.selectbox(
+    "請選擇『經度』(Longitude) 欄位：", 
+    all_columns, 
+    index=all_columns.index(guess_column(['lon', 'lng', '經度'], all_columns))
+)
+# 讓使用者選擇 遊客人數 (權重)
+# 這裡會列出所有 'lat', 'lon', '景點名稱' 以外的欄位
+weight_options = [col for col in all_columns if col not in [lat_col, lon_col, '景點名稱']]
+if not weight_options:
+    st.error("錯誤：找不到任何可作為「遊客人數」的欄位。")
     st.stop()
 
+weight_col = st.selectbox(
+    "請選擇『權重 (遊客人數)』欄位：", 
+    weight_options, 
+    index=weight_options.index(guess_column(['人', '數', 'visit', 'tourist', '遊客'], weight_options))
+)
 
-# --- 4. 設定模擬比例 (保留互動性) ---
-st.info("我們將依據「遊客人數」來生成模擬點，以呈現熱點。")
+st.success(f"您選擇以「{weight_col}」作為密度權重。")
 
+# --- 4. 設定模擬比例 ---
+st.write("---")
+st.subheader("步驟 2：設定密度模擬")
 scale_factor = st.slider(
     "請調整比例尺：每 N 個遊客 = 1 個模擬點 (數字越小，地圖 3D 高塔越密、越高)", 
-    min_value=1, 
-    max_value=5000, 
-    value=100  # 預設值
+    min_value=10, 
+    max_value=20000, 
+    value=5000, # 預設值
+    step=10
 )
 
 # --- 5. 生成模擬點並繪製地圖 ---
 try:
     points = []
     for _, row in data.iterrows():
-        lat = pd.to_numeric(row[LAT_COLUMN], errors='coerce')
-        lon = pd.to_numeric(row[LON_COLUMN], errors='coerce')
-        weight = pd.to_numeric(row[WEIGHT_COLUMN], errors='coerce')
+        lat = pd.to_numeric(row[lat_col], errors='coerce')
+        lon = pd.to_numeric(row[lon_col], errors='coerce')
+        weight = pd.to_numeric(row[weight_col], errors='coerce')
         
-        if pd.isna(weight) or pd.isna(lat) or pd.isna(lon):
+        if pd.isna(weight) or pd.isna(lat) or pd.isna(lon) or weight <= 0:
             continue 
 
         num_points = int(weight / scale_factor)
@@ -77,29 +116,29 @@ try:
     
     if not points:
         st.warning("生成的點數量為 0。")
-        st.info("可能原因：您設定的「比例尺」數字太大，或「遊客人數」欄位數值太小。請試著將滑桿往左拉 (例如 50 或 10)。")
+        st.info("可能原因：您設定的「比例尺」數字太大。請試著將滑桿往左拉。")
         st.stop()
         
     data_for_map = pd.DataFrame(points)
 
     # --- 6. 設定 Pydeck (HexagonLayer) ---
-    st.subheader("3D 觀光熱點地圖")
+    st.write("---")
+    st.subheader(f"步驟 3：{weight_col} 觀光熱點地圖")
     layer_hexagon = pdk.Layer(
         'HexagonLayer',
         data=data_for_map,
         get_position='[lon, lat]',
-        radius=500, 
-        elevation_scale=10, 
+        radius=1000, 
+        elevation_scale=20, 
         elevation_range=[0, 3000],
         pickable=True,
         extruded=True,
     )
 
-    # 將地圖中心點設在所有景點的平均經緯度
     view_state_hexagon = pdk.ViewState(
-        latitude=data[LAT_COLUMN].mean(), 
-        longitude=data[LON_COLUMN].mean(),
-        zoom=10, 
+        latitude=data[lat_col].astype(float).mean(), 
+        longitude=data[lon_col].astype(float).mean(),
+        zoom=9.5, 
         pitch=50, 
     )
 
@@ -109,12 +148,11 @@ try:
         tooltip={"text": "這個區域的熱度 (點)：{elevationValue}"}
     )
     
-    # 顯示地圖！
     st.pydeck_chart(r_hexagon)
     
     # 顯示原始資料表 (可選)
     st.write("---")
-    st.subheader("原始資料預覽")
+    st.subheader("轉置後的原始資料預覽")
     st.dataframe(data)
     
 except Exception as e:
