@@ -91,7 +91,7 @@ fig = px.scatter_geo(
     
     projection="orthographic", # 3D 地球儀
     
-    color_continuous_scale=px.colors.sequential.YlOrRd_r,
+    color_continuous_scale=px.colors.sequential.YlOrRd,
     title=f"全球極端貧窮人口比例 ({selected_year}年)"
 )
 
