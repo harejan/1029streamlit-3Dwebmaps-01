@@ -3,7 +3,7 @@ import pandas as pd
 import pydeck as pdk
 # 注意：這個版本不再需要 numpy
 
-st.title("高雄市觀光熱點 3D 柱狀圖")
+st.title("高雄市主要觀光遊憩區遊客人次 3D 柱狀圖👤")
 
 # --- (重要) 1. 請在這裡設定您的檔案和欄位名稱 ---
 
