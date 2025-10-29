@@ -4,32 +4,67 @@ import plotly.graph_objects as go
 import pandas as pd
 
 
-# --- 1. 定義我們要使用的檔案和欄位 ---
-# (這是我為您建立的新檔案)
-NEW_CSV_FILE = "extreme_poverty_countries_2023.csv" 
-# (這是 CSV 檔案中的欄位名稱)
+st.title("Plotly 3D 地球儀：全球極端貧窮人口比例")
+
+# --- 1. 定義我們要使用的「原始」檔案和欄位 ---
+# (這必須是您在 GitHub 上傳的原始檔案名稱)
+ORIGINAL_CSV_FILE = "share-of-population-in-extreme-poverty.zip/share-of-population-in-extreme-poverty.csv"
 DATA_COLUMN = "Share of population in poverty ($3 a day, 2021 prices)"
 
-st.title("Plotly 3D 地球儀：全球極端貧窮人口比例 (2023)")
-
-# --- 2. 讀取新的 CSV 檔案 ---
+# --- 2. 讀取「原始」 CSV 檔案 ---
 try:
-    df = pd.read_csv(NEW_CSV_FILE)
+    df_raw = pd.read_csv(ORIGINAL_CSV_FILE)
 except FileNotFoundError:
-    st.error(f"錯誤：找不到處理過的檔案 '{NEW_CSV_FILE}'。")
-    st.error("您可能需要重新上傳原始 ZIP 檔案並讓我再次處理。")
+    st.error(f"錯誤：找不到您的原始檔案 '{ORIGINAL_CSV_FILE}'。")
+    st.error("請確保您已將原始的 ZIP 檔案內容上傳到 GitHub (與 app.py 放在一起)。")
     st.stop()
 except Exception as e:
-    st.error(f"讀取檔案時出錯: {e}")
+    st.error(f"讀取原始檔案時出錯: {e}")
     st.stop()
 
-# --- 3. (重要) 篩選掉沒有貧窮資料的國家 ---
-# 我們只繪製那些在 2023 年有提供實際數據的國家
-df_plottable = df.dropna(subset=[DATA_COLUMN])
+# --- 3. (關鍵) 在 Streamlit 中即時清理資料 ---
+st.write("正在讀取原始資料並即時清理...")
+try:
+    # 轉換 'Year' 欄位為數字
+    df_clean = df_raw.copy()
+    df_clean['Year'] = pd.to_numeric(df_clean['Year'], errors='coerce')
+    df_clean = df_clean.dropna(subset=['Year'])
+    df_clean['Year'] = df_clean['Year'].astype(int)
 
-st.info(f"正在顯示 {len(df_plottable)} 個在 2023 年有提供數據的國家/地區。")
+    # 篩選掉「地區」資料 (只保留有 3 位 ISO 代碼的「國家」)
+    df_clean = df_clean.dropna(subset=['Code'])
+    df_countries = df_clean[df_clean['Code'].str.len() == 3].copy()
+
+    # 找出「最近的」、「擁有最多數據」的年份
+    st.write("正在尋找資料最完整的年份...")
+    # 找出每年有多少國家的數據
+    year_counts = df_countries.dropna(subset=[DATA_COLUMN])['Year'].value_counts()
+    # 篩選出數據量大於 100 個國家的年份
+    comprehensive_years = year_counts[year_counts > 100].index
+    
+    if comprehensive_years.empty:
+        # 如果找不到，就用數據最多的那一年
+        best_year = year_counts.idxmax()
+    else:
+        # 如果找到了，就用這些年份中「最近」的那一年
+        best_year = comprehensive_years.max()
+        
+    st.success(f"找到資料最完整的年份: {best_year}")
+
+    # 最終篩選出該年份的資料
+    df_final = df_countries[df_countries['Year'] == best_year]
+    
+    # 篩選掉該年份中沒有實際貧窮數據的國家
+    df_plottable = df_final.dropna(subset=[DATA_COLUMN])
+
+except Exception as e:
+    st.error(f"清理資料時發生錯誤: {e}")
+    st.stop()
+
 
 # --- 4. 建立 3D 地理散點圖 (scatter_geo) ---
+st.info(f"正在顯示 {best_year} 年，{len(df_plottable)} 個國家/地區的資料。")
+
 fig = px.scatter_geo(
     df_plottable,
     
@@ -43,7 +78,7 @@ fig = px.scatter_geo(
     
     # 美化
     color_continuous_scale=px.colors.sequential.YlOrRd_r, # 使用反向的黃-橘-紅 色階
-    title=f"全球極端貧窮人口比例 (2023年)"
+    title=f"全球極端貧窮人口比例 ({best_year}年)"
 )
 
 fig.update_layout(
@@ -58,10 +93,8 @@ fig.update_layout(
 st.plotly_chart(fig, use_container_width=True)
 
 st.write("---")
-st.subheader("資料來源 (2023年，已篩選)")
+st.subheader(f"資料來源 ({best_year}年，已清理並篩選)")
 st.dataframe(df_plottable)
-
-st.title("Plotly 3D 地圖 (網格 - DEM 表面)")
 
 # --- 1. 讀取範例 DEM 資料 ---
 # Plotly 內建的 "volcano" (火山) DEM 數據 (儲存為 CSV)
