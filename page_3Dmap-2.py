@@ -8,62 +8,78 @@ st.title("Plotly 3D 地球儀：全球極端貧窮人口比例")
 
 # --- 1. 定義我們要使用的「原始」檔案和欄位 ---
 # (這必須是您在 GitHub 上傳的原始檔案名稱)
-ORIGINAL_CSV_FILE = "share-of-population-in-extreme-poverty.csv"
+ORIGINAL_CSV_FILE = "share-of-population-in-extreme-poverty.zip/share-of-population-in-extreme-poverty.csv"
 DATA_COLUMN = "Share of population in poverty ($3 a day, 2021 prices)"
 
 # --- 2. 讀取「原始」 CSV 檔案 ---
-try:
-    df_raw = pd.read_csv(ORIGINAL_CSV_FILE)
-except FileNotFoundError:
-    st.error(f"錯誤：找不到您的原始檔案 '{ORIGINAL_CSV_FILE}'。")
-    st.error("請確保您已將原始的 ZIP 檔案內容上傳到 GitHub (與 app.py 放在一起)。")
-    st.stop()
-except Exception as e:
-    st.error(f"讀取原始檔案時出錯: {e}")
-    st.stop()
+@st.cache_data  # (重要) 使用快取，避免每次選擇都重新讀檔
+def load_and_clean_data(file_path):
+    try:
+        df_raw = pd.read_csv(file_path)
+    except FileNotFoundError:
+        st.error(f"錯誤：找不到您的原始檔案 '{file_path}'。")
+        st.error("請確保您已將原始的 ZIP 檔案內容上傳到 GitHub (與 app.py 放在一起)。")
+        return None, None
+    except Exception as e:
+        st.error(f"讀取原始檔案時出錯: {e}")
+        return None, None
 
-# --- 3. (關鍵) 在 Streamlit 中即時清理資料 ---
-st.write("正在讀取原始資料並即時清理...")
-try:
-    # 轉換 'Year' 欄位為數字
-    df_clean = df_raw.copy()
-    df_clean['Year'] = pd.to_numeric(df_clean['Year'], errors='coerce')
-    df_clean = df_clean.dropna(subset=['Year'])
-    df_clean['Year'] = df_clean['Year'].astype(int)
+    # --- (關鍵) 即時清理資料 ---
+    try:
+        df_clean = df_raw.copy()
+        # 轉換 'Year' 欄位為數字
+        df_clean['Year'] = pd.to_numeric(df_clean['Year'], errors='coerce')
+        df_clean = df_clean.dropna(subset=['Year'])
+        df_clean['Year'] = df_clean['Year'].astype(int)
 
-    # 篩選掉「地區」資料 (只保留有 3 位 ISO 代碼的「國家」)
-    df_clean = df_clean.dropna(subset=['Code'])
-    df_countries = df_clean[df_clean['Code'].str.len() == 3].copy()
-
-    # 找出「最近的」、「擁有最多數據」的年份
-    st.write("正在尋找資料最完整的年份...")
-    # 找出每年有多少國家的數據
-    year_counts = df_countries.dropna(subset=[DATA_COLUMN])['Year'].value_counts()
-    # 篩選出數據量大於 100 個國家的年份
-    comprehensive_years = year_counts[year_counts > 100].index
-    
-    if comprehensive_years.empty:
-        # 如果找不到，就用數據最多的那一年
-        best_year = year_counts.idxmax()
-    else:
-        # 如果找到了，就用這些年份中「最近」的那一年
-        best_year = comprehensive_years.max()
+        # 篩選掉「地區」資料 (只保留有 3 位 ISO 代碼的「國家」)
+        df_clean = df_clean.dropna(subset=['Code'])
+        df_countries = df_clean[df_clean['Code'].str.len() == 3].copy()
         
-    st.success(f"找到資料最完整的年份: {best_year}")
+        # 找出所有可用的年份 (只找有實際貧窮數據的年份)
+        df_with_data = df_countries.dropna(subset=[DATA_COLUMN])
+        available_years = sorted(df_with_data['Year'].unique(), reverse=True)
+        
+        return df_countries, available_years
 
-    # 最終篩選出該年份的資料
-    df_final = df_countries[df_countries['Year'] == best_year]
-    
-    # 篩選掉該年份中沒有實際貧窮數據的國家
-    df_plottable = df_final.dropna(subset=[DATA_COLUMN])
+    except Exception as e:
+        st.error(f"清理資料時發生錯誤: {e}")
+        return None, None
 
-except Exception as e:
-    st.error(f"清理資料時發生錯誤: {e}")
+# 執行讀取和清理
+df_countries, available_years = load_and_clean_data(ORIGINAL_CSV_FILE)
+
+# 如果讀取失敗，就停止
+if df_countries is None or not available_years:
+    st.error("資料載入失敗或找不到任何可用的年份數據。")
     st.stop()
 
 
-# --- 4. 建立 3D 地理散點圖 (scatter_geo) ---
-st.info(f"正在顯示 {best_year} 年，{len(df_plottable)} 個國家/地區的資料。")
+# --- 3. (新功能) 建立年份選擇「Bar」 ---
+st.header("請選擇您想查看的年份")
+st.info("（只會顯示該年份有實際提供數據的國家）")
+
+selected_year = st.selectbox(
+    "選擇年份：",
+    available_years  # 使用我們清理後找出的年份列表
+)
+
+st.write(f"---")
+st.header(f"{selected_year} 年全球極端貧窮人口比例")
+
+# --- 4. 根據選擇的年份篩選資料 ---
+# 1. 篩選出該年份的所有國家
+df_year_data = df_countries[df_countries['Year'] == selected_year]
+# 2. 篩選掉該年份中沒有實際貧窮數據的國家
+df_plottable = df_year_data.dropna(subset=[DATA_COLUMN])
+
+if df_plottable.empty:
+    st.warning(f"在 {selected_year} 年沒有找到任何國家的貧窮數據。")
+    st.stop()
+
+
+# --- 5. 建立 3D 地理散點圖 (scatter_geo) ---
+st.info(f"正在顯示 {selected_year} 年，{len(df_plottable)} 個國家/地區的資料。")
 
 fig = px.scatter_geo(
     df_plottable,
@@ -73,27 +89,25 @@ fig = px.scatter_geo(
     hover_name="Entity",     # 滑鼠懸停時顯示國家名稱
     size=DATA_COLUMN,        # 點的大小也代表貧窮比例
     
-    # *** 關鍵：使用 "orthographic" 投影法來建立 3D 地球儀 ***
-    projection="orthographic",
+    projection="orthographic", # 3D 地球儀
     
-    # 美化
-    color_continuous_scale=px.colors.sequential.YlOrRd_r, # 使用反向的黃-橘-紅 色階
-    title=f"全球極端貧窮人口比例 ({best_year}年)"
+    color_continuous_scale=px.colors.sequential.YlOrRd_r,
+    title=f"全球極端貧窮人口比例 ({selected_year}年)"
 )
 
 fig.update_layout(
     geo=dict(
-        bgcolor= 'rgba(0,0,0,0)', # 地球背景透明
+        bgcolor= 'rgba(0,0,0,0)', 
         showland=True,
-        landcolor="rgb(217, 217, 217)", # 陸地顏色
+        landcolor="rgb(217, 217, 217)", 
     )
 )
 
-# --- 5. 在 Streamlit 中顯示 ---
+# --- 6. 在 Streamlit 中顯示 ---
 st.plotly_chart(fig, use_container_width=True)
 
 st.write("---")
-st.subheader(f"資料來源 ({best_year}年，已清理並篩選)")
+st.subheader(f"資料來源 ({selected_year}年，已清理並篩選)")
 st.dataframe(df_plottable)
 
 # --- 1. 讀取範例 DEM 資料 ---
