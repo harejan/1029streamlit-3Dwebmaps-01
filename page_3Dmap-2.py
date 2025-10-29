@@ -4,37 +4,62 @@ import plotly.graph_objects as go
 import pandas as pd
 
 
-st.title("Plotly 3D 地圖 (向量 - 地球儀)")
+# --- 1. 定義我們要使用的檔案和欄位 ---
+# (這是我為您建立的新檔案)
+NEW_CSV_FILE = "extreme_poverty_countries_2023.csv" 
+# (這是 CSV 檔案中的欄位名稱)
+DATA_COLUMN = "Share of population in poverty ($3 a day, 2021 prices)"
 
-# --- 1. 載入 Plotly 內建的範例資料 ---
-df = px.data.gapminder().query("year == 2007")
-# px.data 提供了幾個內建的範例資料集，方便使用者練習或展示。
-# gapminder() 是其中一個內建函式，它會載入著名的 Gapminder 資料集。
-# 這個資料集包含了世界各國多年的平均壽命 (lifeExp)、人均 GDP (gdpPercap) 和人口 (pop) 等數據。
-# .query("year == 2007")是 pandas DataFrame 提供的一個方法，用於根據字串表達式來篩選資料框的列 (rows)。
-# "year == 2007" 是一個字串形式的查詢條件，意思是「選取 'year' 欄位的值等於 2007 的那些列」。
+st.title("Plotly 3D 地球儀：全球極端貧窮人口比例 (2023)")
 
-# --- 2. 建立 3D 地理散點圖 (scatter_geo) ---
+# --- 2. 讀取新的 CSV 檔案 ---
+try:
+    df = pd.read_csv(NEW_CSV_FILE)
+except FileNotFoundError:
+    st.error(f"錯誤：找不到處理過的檔案 '{NEW_CSV_FILE}'。")
+    st.error("您可能需要重新上傳原始 ZIP 檔案並讓我再次處理。")
+    st.stop()
+except Exception as e:
+    st.error(f"讀取檔案時出錯: {e}")
+    st.stop()
+
+# --- 3. (重要) 篩選掉沒有貧窮資料的國家 ---
+# 我們只繪製那些在 2023 年有提供實際數據的國家
+df_plottable = df.dropna(subset=[DATA_COLUMN])
+
+st.info(f"正在顯示 {len(df_plottable)} 個在 2023 年有提供數據的國家/地區。")
+
+# --- 4. 建立 3D 地理散點圖 (scatter_geo) ---
 fig = px.scatter_geo(
-    df,
-    locations="iso_alpha",  # 國家代碼
-    color="continent",      # 依據大陸洲別上色
-    hover_name="country",   # 滑鼠懸停時顯示國家名稱
-    size="pop",             # 點的大小代表人口數
-
+    df_plottable,
+    
+    locations="Code",        # 國家代碼 (例如 "TWN", "USA")
+    color=DATA_COLUMN,       # 依據貧窮比例上色
+    hover_name="Entity",     # 滑鼠懸停時顯示國家名稱
+    size=DATA_COLUMN,        # 點的大小也代表貧窮比例
+    
     # *** 關鍵：使用 "orthographic" 投影法來建立 3D 地球儀 ***
-    projection="orthographic"
+    projection="orthographic",
+    
+    # 美化
+    color_continuous_scale=px.colors.sequential.YlOrRd_r, # 使用反向的黃-橘-紅 色階
+    title=f"全球極端貧窮人口比例 (2023年)"
 )
-# "orthographic" 投影會將地球渲染成一個從太空中看到的球體，
-# 從而產生類似 3D 地球儀的視覺效果。
-# 其他常見投影如 "natural earth", "mercator" 等通常是 2D 平面地圖。
 
+fig.update_layout(
+    geo=dict(
+        bgcolor= 'rgba(0,0,0,0)', # 地球背景透明
+        showland=True,
+        landcolor="rgb(217, 217, 217)", # 陸地顏色
+    )
+)
 
-# --- 3. 在 Streamlit 中顯示 ---
+# --- 5. 在 Streamlit 中顯示 ---
 st.plotly_chart(fig, use_container_width=True)
-# use_container_width=True:當設定為 True 時，Streamlit 會忽略 Plotly 圖表物件本身可能設定的寬度，
-# 並強制讓圖表的寬度自動延展，以填滿其所在的 Streamlit 容器 (例如，主頁面的寬度、某個欄位 (column) 的寬度，
-# 或是一個展開器 (expander) 的寬度)。
+
+st.write("---")
+st.subheader("資料來源 (2023年，已篩選)")
+st.dataframe(df_plottable)
 
 st.title("Plotly 3D 地圖 (網格 - DEM 表面)")
 
