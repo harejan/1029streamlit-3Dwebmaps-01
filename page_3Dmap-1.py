@@ -12,15 +12,17 @@ st.title("高雄市觀光熱點 3D 柱狀圖")
 YOUR_CSV_FILE = "kaohsiung_tourist.csv" 
 
 # 1-2. 您 CSV 中「緯度」的「橫列標題」
+# (根據您的檔案，這個應該是 'lat')
 LAT_ROW_NAME = "lat" 
 
 # 1-3. 您 CSV 中「經度」的「橫列標題」
+# (根據您的檔案，這個應該是 'lon')
 LON_ROW_NAME = "lon"
 
 # 1-4. (*** 請務必修改此行 ***) 
 # 請將 "遊客人數" 改成您 CSV 中代表「遊客人數」的「橫列標題」
 # 例如: "2023年遊客人數", "總計", 或 "visitors"
-WEIGHT_ROW_NAME = "遊客人數" 
+WEIGHT_ROW_NAME = "遊客人數" # <--- 請檢查並修改此行
 
 # ----------------------------------------------------
 
@@ -48,7 +50,7 @@ try:
         st.error(f"錯誤：您在程式碼中設定的「橫列標題」在 CSV 檔案中找不到。")
         st.error(f"您設定的欄位: {required_cols}")
         st.error(f"CSV 轉置後的實際欄位: {data.columns.tolist()}")
-        st.error(f"請檢查程式碼第 10-17 行的設定，特別是 `WEIGHT_ROW_NAME`。")
+        st.error(f"請檢查程式碼第 10-19 行的設定，特別是 `WEIGHT_ROW_NAME`。")
         st.stop()
         
     # 轉換資料型別，以防萬一
@@ -75,7 +77,7 @@ column_layer = pdk.Layer(
     data=data,
     get_position=[LON_ROW_NAME, LAT_ROW_NAME],  # [經度, 緯度]
     get_elevation=WEIGHT_ROW_NAME,             # 高度 = 遊客人數
-    elevation_scale=0.01, # (關鍵) 將遊客人數縮小，避免柱子太高 (例如 1,000,000 * 0.01 = 10000 公尺)
+    elevation_scale=0.01, # 將遊客人數縮小，避免柱子太高
     radius=500,                                # 每個柱子的半徑 (500 公尺)
     get_fill_color=[255, 165, 0, 180],         # 柱子顏色 (橘色)
     pickable=True,
@@ -91,7 +93,7 @@ text_layer = pdk.Layer(
     get_color=[0, 0, 0, 200], # 文字顏色 (黑色)
     get_size=14,              # 文字大小
     get_alignment_baseline="'bottom'", # 文字顯示在座標「上方」
-    get_pixel_offset=[0, -10] # 向上偏移 10 像素，避免壓到點
+    get_pixel_offset=[0, -10] # 向上偏移 10 像素
 )
 
 # --- 4. 設定地圖視角和 Tooltip ---
@@ -102,14 +104,14 @@ view_state = pdk.ViewState(
     pitch=50,                             # 傾斜 50 度
 )
 
-# Tooltip (滑鼠移上去時顯示的資訊)
+# Tooltip (滑鼠移上去時顯示的資訊) - 簡化版語法
 tooltip = {
-    "html": "<b>{景點名稱}</b><br/>" + f"{WEIGHT_ROW_NAME}: " + "{" + WEIGHT_ROW_NAME + "}"
+    "html": "<b>{景點名稱}</b><br/>" + WEIGHT_ROW_NAME + ": {" + WEIGHT_ROW_NAME + "}"
 }
 
 # --- 5. 組合圖層並顯示地圖 ---
 r = pdk.Deck(
-    layers=[column_layer, text_layer], # (關鍵) 同時顯示兩個圖層
+    layers=[column_layer, text_layer], # 同時顯示兩個圖層
     initial_view_state=view_state,
     tooltip=tooltip,
 )
@@ -120,7 +122,6 @@ st.pydeck_chart(r)
 st.write("---")
 st.subheader("地圖資料來源（已轉置）")
 st.dataframe(data[['景點名稱', LAT_ROW_NAME, LON_ROW_NAME, WEIGHT_ROW_NAME]])
-🚨 最重要的修改
 
 # ===============================================
 #          第二個地圖：模擬 DEM
